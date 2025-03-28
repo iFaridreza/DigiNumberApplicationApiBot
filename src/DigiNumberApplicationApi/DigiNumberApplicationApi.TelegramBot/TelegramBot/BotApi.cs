@@ -9,10 +9,8 @@ using DigiNumberApplicationApi.TelegramBot.Api;
 using DigiNumberApplicationApi.TelegramBot.Cashe;
 using DigiNumberApplicationApi.TelegramBot.StepUser;
 using DigiNumberApplicationApi.TelegramBot.Api.Models;
-using DigiNumberApplicationApi.TelegramBot.Infrastructer.Repository;
-using User = DigiNumberApplicationApi.TelegramBot.Core.Domian.User;
-using System.Runtime.InteropServices;
 using DigiNumberApplicationApi.TelegramBot.Core.Domian;
+using User = DigiNumberApplicationApi.TelegramBot.Core.Domian.User;
 
 namespace DigiNumberApplicationApi.TelegramBot.TelegramBot;
 public class BotApi
@@ -67,6 +65,24 @@ public class BotApi
                 if (data.Equals("AddCountry"))
                 {
                     _logger.Information($"Sudo {chatId} افزودن کشور ➕");
+
+                    bool anyStep = await userStepRepository.Any(chatId);
+
+                    if (anyStep)
+                    {
+                        UserStep userStep = await userStepRepository.Get(chatId);
+                        await userStepRepository.Remove(userStep);
+                    }
+
+                    await userStepRepository.Create(new()
+                    {
+                        ChatId = chatId,
+                        ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                        Step = "CountryCode"
+                    });
+
+                    await _telegramBotClient.DeleteMessage(chatId, messageId);
+                    await _telegramBotClient.SendMessage(chatId, ReplyText._countryCode, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
                 }
 
                 return;
@@ -106,7 +122,7 @@ public class BotApi
                     break;
                 case "♻️ استعلام شماره":
                     {
-
+                        await OnAvailableCountry(message, chatId);
                     }
                     break;
                 case "🛍 خرید شماره مجازی":
@@ -129,10 +145,16 @@ public class BotApi
                         await OnListCountry(message, chatId);
                     }
                     break;
+                case "👤 گزارش کاربر":
+                    {
+
+                    }break;
                 default:
                     {
                         IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
                         IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
+                        ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
+                        IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
 
                         bool anyStep = await userStepRepository.Any(chatId);
 
@@ -143,7 +165,9 @@ public class BotApi
 
                         UserStep userStep = await userStepRepository.Get(chatId);
 
-                        if (userStep.Step == "Phone")
+                        string step = userStep.Step;
+
+                        if (step == "Phone")
                         {
                             string phone = text.Replace(" ", "");
 
@@ -178,7 +202,7 @@ public class BotApi
                             if (!registerUser.Status)
                             {
                                 _logger.Information($"User {chatId} RegisterUser Status False");
-
+                                await userStepRepository.Remove(userStep);
                                 await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
                                 return;
                             }
@@ -200,7 +224,7 @@ public class BotApi
 
                             await _telegramBotClient.SendMessage(chatId, ReplyText._codeOtp, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Back());
                         }
-                        else if (userStep.Step == "Code")
+                        else if (step == "Code")
                         {
                             string code = text.Replace(" ", "");
 
@@ -209,6 +233,7 @@ public class BotApi
                             if (!isValid || code.Length != 5)
                             {
                                 _logger.Information($"User {chatId} Code Invalid");
+                                CashManager.Remove(chatId);
 
                                 await userStepRepository.Remove(userStep);
                                 await _telegramBotClient.SendMessage(chatId, ReplyText._invalidCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
@@ -219,6 +244,8 @@ public class BotApi
 
                             if (cashSession is null)
                             {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
                                 await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
                                 return;
                             }
@@ -228,6 +255,8 @@ public class BotApi
 
                             if (string.IsNullOrEmpty(codeToken) || string.IsNullOrEmpty(phone))
                             {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
                                 await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
                                 return;
                             }
@@ -236,6 +265,8 @@ public class BotApi
 
                             if (!verifyState)
                             {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
                                 await _telegramBotClient.SendMessage(chatId, ReplyText._invalidCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
                                 return;
                             }
@@ -254,6 +285,154 @@ public class BotApi
 
                             await _telegramBotClient.SendMessage(chatId, ReplyText._verifySucsess, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
                         }
+                        else if (step == "CountryCode")
+                        {
+                            _logger.Information($"Sudo {chatId} {text}");
+                                
+                            bool anyCountryCode = await virtualNumberDetailsRepository.Any(text);
+
+                            if (anyCountryCode)
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._countryCodeExists, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            CashSession cashSession = new();
+                            cashSession.keyValuePairs.Add("CountryCode", text);
+
+                            CashManager.AddOrUpdate(chatId, cashSession);
+
+                            await userStepRepository.Remove(userStep);
+
+                            await userStepRepository.Create(new()
+                            {
+                                ChatId = chatId,
+                                ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                Step = "CountryName"
+                            });
+
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._countryName, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+
+                        }
+                        else if (step == "CountryName")
+                        {
+                            _logger.Information($"Sudo {chatId} {text}");
+
+                            CashSession? cashSession = CashManager.Get(chatId);
+
+                            if (cashSession is null)
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            cashSession.keyValuePairs.Add("CountryName", text);
+                            CashManager.AddOrUpdate(chatId, cashSession);
+
+                            await userStepRepository.Remove(userStep);
+
+                            await userStepRepository.Create(new()
+                            {
+                                ChatId = chatId,
+                                ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                Step = "CountryFlag"
+                            });
+
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._countryFlag, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+                        }
+                        else if (step == "CountryFlag")
+                        {
+                            _logger.Information($"Sudo {chatId} {text}");
+
+                            bool isFlag = Utils.IsFlagCountry(text);
+
+                            if (!isFlag)
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._invalidFlag, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            CashSession? cashSession = CashManager.Get(chatId);
+
+                            if (cashSession is null)
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            cashSession.keyValuePairs.Add("CountryFlag", text);
+
+                            CashManager.AddOrUpdate(chatId, cashSession);
+
+                            await userStepRepository.Remove(userStep);
+
+                            await userStepRepository.Create(new()
+                            {
+                                ChatId = chatId,
+                                ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                Step = "CountryPrice"
+                            });
+
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._countryPrice, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+                        }
+                        else if (step == "CountryPrice")
+                        {
+                            _logger.Information($"Sudo {chatId} {text}");
+
+                            if (!decimal.TryParse(text, out decimal countryPrice))
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._invalidPrice, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            CashSession? cashSession = CashManager.Get(chatId);
+
+                            if (cashSession is null)
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            cashSession.keyValuePairs.TryGetValue("CountryName", out string? countryName);
+                            cashSession.keyValuePairs.TryGetValue("CountryFlag", out string? countryFlag);
+                            cashSession.keyValuePairs.TryGetValue("CountryCode", out string? countryCode);
+
+                            if (string.IsNullOrEmpty(countryName) ||
+                               string.IsNullOrEmpty(countryFlag) ||
+                               string.IsNullOrEmpty(countryCode))
+                            {
+                                CashManager.Remove(chatId);
+                                await userStepRepository.Remove(userStep);
+                                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                return;
+                            }
+
+                            await userStepRepository.Remove(userStep);
+                            
+                            await virtualNumberDetailsRepository.Add(new()
+                            {
+                                CountryCode = countryCode,
+                                CountryName = countryName,
+                                Flag = countryFlag,
+                                Price = countryPrice
+                            });
+
+                            IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
+
+                            await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._countryCodeAdd, countryFlag, countryName), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.CountryListEditor(countrys));
+                        }
                     }
                     break;
             }
@@ -262,6 +441,27 @@ public class BotApi
         {
             _logger.Error(ex, "❌ Error");
         }
+    }
+
+    private async Task OnAvailableCountry(Message message, long chatId)
+    {
+        int messageId = message.Id;
+
+        IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
+        IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
+
+        bool anyUser = await userRepository.Any(chatId);
+
+        if (!anyUser)
+        {
+            return;
+        }
+
+        _logger.Information($"Sudo {chatId} ♻️ استعلام شماره");
+
+        IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
+
+        await _telegramBotClient.SendMessage(chatId, ReplyText._countryList, replyParameters: messageId, replyMarkup: ReplyKeyboard.CountryListAvailable(countrys));
     }
 
     private async Task OnListCountry(Message message, long chatId)
@@ -282,7 +482,7 @@ public class BotApi
 
         IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
 
-        await _telegramBotClient.SendMessage(chatId, ReplyText._countryList, replyParameters: messageId, replyMarkup: ReplyKeyboard.CountryList(countrys));
+        await _telegramBotClient.SendMessage(chatId, ReplyText._countryList, replyParameters: messageId, replyMarkup: ReplyKeyboard.CountryListEditor(countrys));
     }
 
     private async Task OnRules(Message message, long chatId)

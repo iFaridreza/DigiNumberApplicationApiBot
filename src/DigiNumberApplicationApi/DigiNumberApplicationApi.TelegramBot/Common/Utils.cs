@@ -34,7 +34,15 @@ public static class Utils
         return appSettings;
     }
 
-   
+    public static bool IsFlagCountry(string flagCountry)
+    {
+        if (string.IsNullOrEmpty(flagCountry) || flagCountry.Length != 4) return false;
+
+        var utf32Chars = flagCountry.EnumerateRunes().ToArray();
+        return utf32Chars.Length == 2 &&
+               utf32Chars.All(rune => rune.Value is >= 0x1F1E6 and <= 0x1F1FF);
+    }
+
     public static bool IsValidPhone(string phone)
     {
         string pattern = @"^09\d{9}$";

@@ -51,25 +51,31 @@ public static class ReplyKeyboard
         return inlineKeyboardMarkup;
     }
 
-    internal static InlineKeyboardMarkup CountryList(IEnumerable<VirtualNumberDetails> virtualNumberDetails)
+    internal static InlineKeyboardMarkup CountryListEditor(IEnumerable<VirtualNumberDetails> virtualNumberDetails)
     {
         InlineKeyboardMarkup inlineKeyboardMarkup = new();
 
-        inlineKeyboardMarkup.AddButton(new InlineKeyboardButton()
+        inlineKeyboardMarkup.AddButton(new()
         {
             Text = "🌎",
             CallbackData = "Alert"
         });
 
-        inlineKeyboardMarkup.AddButton(new InlineKeyboardButton()
+        inlineKeyboardMarkup.AddButton(new()
         {
             Text = "🏁",
             CallbackData = "Alert"
         });
 
-        inlineKeyboardMarkup.AddButton(new InlineKeyboardButton()
+        inlineKeyboardMarkup.AddButton(new()
         {
             Text = "💰",
+            CallbackData = "Alert"
+        });
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "❌",
             CallbackData = "Alert"
         }).AddNewRow();
 
@@ -78,13 +84,52 @@ public static class ReplyKeyboard
             inlineKeyboardMarkup.AddButton(item.CountryName);
             inlineKeyboardMarkup.AddButton($"{item.Flag} {item.CountryCode}");
             inlineKeyboardMarkup.AddButton($"{item.Price.ToString("0,000")}");
+            inlineKeyboardMarkup.AddButton(new()
+            {
+                Text = "🗑",
+                CallbackData = $"Remove_{item.CountryCode}"
+            }).AddNewRow();
         }
 
-        inlineKeyboardMarkup.AddButton(new InlineKeyboardButton()
+        inlineKeyboardMarkup.AddButton(new()
         {
             Text = "افزودن کشور ➕",
             CallbackData = "AddCountry"
         });
+
+        return inlineKeyboardMarkup;
+    } 
+    
+    internal static InlineKeyboardMarkup CountryListAvailable(IEnumerable<VirtualNumberDetails> virtualNumberDetails)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "🌎",
+            CallbackData = "Alert"
+        });
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "🏁",
+            CallbackData = "Alert"
+        });
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "💰",
+            CallbackData = "Alert"
+        }).AddNewRow();
+
+    
+        foreach (var item in virtualNumberDetails)
+        {
+            inlineKeyboardMarkup.AddButton(item.CountryName);
+            inlineKeyboardMarkup.AddButton($"{item.Flag} {item.CountryCode}");
+            inlineKeyboardMarkup.AddButton($"{item.Price.ToString("0,000")}").AddNewRow();
+        }
+
         return inlineKeyboardMarkup;
     }
 }

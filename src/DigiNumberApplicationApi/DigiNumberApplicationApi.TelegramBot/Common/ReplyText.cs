@@ -7,10 +7,18 @@ public static class ReplyText
     public static readonly string _invalidCode = "<blockquote>❌ خطا</blockquote>\n\nکد ارسال شده صحیح نمیباشد";
     public static readonly string _timeLater = "<blockquote>⚠️ توجه</blockquote>\n\nربات درحال بروزرسانی میباشد لطفا بعدا تلاش کنید";
     public static readonly string _firstSignup = "<blockquote>⚠️ خطا</blockquote>\n\nلطفا ابتدا در اپلیکیشن ثبت نام و احراز هویت کنید و سپس از خدمات ربات استفاده کنید";
+    public static readonly string _invalidPrice = "<blockquote>⚠️ خطا</blockquote>\n\nمبلغ وارد شده اشتباه میباشد";
+    public static readonly string _invalidFlag = "<blockquote>⚠️ خطا</blockquote>\n\nپرچم ارسال شده صحیح نمیباشد";
+    public static readonly string _countryCodeExists = "<blockquote>⚠️ خطا</blockquote>\n\nکد کشور ارسال شده موجود میباشد";
     public static readonly string _verifySucsess = "<blockquote>✅ موفق</blockquote>\n\nثبت نام شما با موفقیت انجام شد";
+    public static readonly string _countryCodeAdd = "<blockquote>✅ موفق</blockquote>\n\nثبت کشور <strong>{0} {1}</strong> با موفقیت انجام شد";
     public static readonly string _informashion = "<blockquote>👤 اطلاعات حساب</blockquote>\n\n✨ آیدی عددی <code>{0}</code> \n\n💰 موجودی <code>{1}</code> تومان";
     public static readonly string _codeOtp = "📮 لطفا کد sms شده را جهت احراز هویت ارسال کنید";
     public static readonly string _support = "👮 جهت ارتباط با پشتیبانی دکمه زیر را لمس کنید";
     public static readonly string _countryList = "🌐 لیست کشور های ثبت شده برای فروش به شرح زیر میباشد";
-    public static readonly string _rules = "<blockquote>🌹 لطفا قبل از خرید ، قوانین را مطالعه کنید</blockquote>\n\n1️⃣ لطفا طبق نیاز حساب خود را شارژ کنید برگشت مبلغ امکان پذیر نمیباشد\n\n2️⃣ لطفا حتما برای دریافت شماره مجازی از اپلیکیشن های <code>تلگراف یا پلاس مسنجر</code> استفاده کنید در غیر این صورت ربات مسئولیت خراب شدن شماره مجازی را نمیپذیرد\n\n3️⃣ ";
+    public static readonly string _countryName = "<blockquote>⚠️ توجه</blockquote>\n\n👇 لطفا نام کشور را ارسال کنید\n\nهمین نام در پنل قابل مشاهده است";
+    public static readonly string _countryFlag = "<blockquote>⚠️ توجه</blockquote>\n\n👇 لطفا پرچم کشور را ارسال کنید\n\nهمین نام در پنل قابل مشاهده است";
+    public static readonly string _countryPrice = "<blockquote>⚠️ توجه</blockquote>\n\n👇 لطفا قیمت کشور را ارسال کنید\n\nهمین نام در پنل قابل مشاهده است";
+    public static readonly string _countryCode = "<blockquote>⚠️ توجه</blockquote>\n\n👇 لطفا کد کشور را ارسال کنید\n\nهمین نام در پنل قابل مشاهده است";
+    public static readonly string _rules = "<blockquote>🌹 لطفا قبل از خرید ، قوانین را مطالعه کنید</blockquote>\n\n1️⃣ لطفا طبق نیاز حساب خود را شارژ کنید برگشت مبلغ امکان پذیر نمیباشد\n\n2️⃣ لطفا حتما برای دریافت شماره مجازی از اپلیکیشن های <strong>تلگراف یا پلاس مسنجر</strong> استفاده کنید در غیر این صورت ربات مسئولیت خراب شدن شماره مجازی را نمیپذیرد\n\n3️⃣ ";
 }
