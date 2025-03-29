@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+using PhoneNumbers;
 
 namespace DigiNumberApplicationApi.TelegramBot.Common;
 
@@ -8,7 +8,7 @@ public static class Utils
 {
     public static void CreateSessionDir(string sessionPath)
     {
-        string dirSessionPath = Path.Combine(AppContext.BaseDirectory, sessionPath);
+        string dirSessionPath = GetSessionsDirPath(sessionPath);
 
         if (Directory.Exists(dirSessionPath))
         {
@@ -16,6 +16,19 @@ public static class Utils
         }
 
         Directory.CreateDirectory(dirSessionPath);
+    }
+    public static string? GetLoginCode( string lastMessage)
+    {
+        string pattern = @"\b\d{5}\b";
+
+        Match match = Regex.Match(lastMessage, pattern);
+
+        return match.Success ? match.Value : null;
+    }
+    public static string GetSessionsDirPath(string sessionPath)
+    {
+        string dirSessionPath = Path.Combine(AppContext.BaseDirectory, sessionPath);
+        return dirSessionPath;
     }
 
     public static AppSettings GetAppSettings()
@@ -48,5 +61,18 @@ public static class Utils
         string pattern = @"^09\d{9}$";
         bool isValid = Regex.IsMatch(phone, pattern);
         return isValid;
+    }
+
+    public static InfoPhoneNumber InfoPhoneNumber(string phoneNumber)
+    {
+        PhoneNumberUtil phoneNumberInit = PhoneNumberUtil.GetInstance();
+
+        PhoneNumber number = phoneNumberInit.Parse(phoneNumber, null);
+
+        string regionCode = phoneNumberInit.GetRegionCodeForNumber(number);
+
+        int regionCountry = phoneNumberInit.GetCountryCodeForRegion(regionCode);
+
+        return new InfoPhoneNumber(regionCode, $"+{regionCountry}", number.NationalNumber.ToString());
     }
 }

@@ -27,7 +27,7 @@ public class VirtualNumberRepository : IVirtualNumberRepository
 
     public async Task<VirtualNumber> Get(string number)
     {
-        VirtualNumber virtualNumber = await _context.VirtualNumber.SingleAsync(x => x.Number == number);
+        VirtualNumber virtualNumber = await _context.VirtualNumber.Include(x=>x.VirtualSessionDetails).SingleAsync(x => x.Number == number);
         return virtualNumber;
     }
 

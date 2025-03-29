@@ -23,7 +23,6 @@ public static class ReplyKeyboard
 
         replyKeyboardMarkup.AddButtons(["📥 آپلود سشن", "📊 گزارش سشن"]).AddNewRow()
                             .AddButtons(["📈 گزارش ربات", "👤 گزارش کاربر"]).AddNewRow()
-                            .AddButtons(["➖ کسر موجودی", "➕ افزایش موجودی"]).AddNewRow()
                             .AddButton("📋 لیست کشور");
 
         replyKeyboardMarkup.ResizeKeyboard = true;
@@ -42,11 +41,22 @@ public static class ReplyKeyboard
         return replyKeyboardMarkup;
     }
 
+    internal static ReplyKeyboardRemove Remove() => new ReplyKeyboardRemove();
+
     internal static InlineKeyboardMarkup Support(string username)
     {
         InlineKeyboardMarkup inlineKeyboardMarkup = new();
 
         inlineKeyboardMarkup.AddButton(new() { Text = "👮 پشتیبانی", Url = $"https://t.me/{username}" });
+
+        return inlineKeyboardMarkup;
+    }
+
+    internal static InlineKeyboardMarkup Payment(string url)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new() { Text = "💵 درگاه پرداخت", Url = url });
 
         return inlineKeyboardMarkup;
     }
@@ -98,8 +108,8 @@ public static class ReplyKeyboard
         });
 
         return inlineKeyboardMarkup;
-    } 
-    
+    }
+
     internal static InlineKeyboardMarkup CountryListAvailable(IEnumerable<VirtualNumberDetails> virtualNumberDetails)
     {
         InlineKeyboardMarkup inlineKeyboardMarkup = new();
@@ -122,7 +132,7 @@ public static class ReplyKeyboard
             CallbackData = "Alert"
         }).AddNewRow();
 
-    
+
         foreach (var item in virtualNumberDetails)
         {
             inlineKeyboardMarkup.AddButton(item.CountryName);
@@ -132,4 +142,82 @@ public static class ReplyKeyboard
 
         return inlineKeyboardMarkup;
     }
+
+    internal static InlineKeyboardMarkup CountryListInfo(IEnumerable<(string CountryCode, int Count)> virtualNumber)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "🌎",
+            CallbackData = "Alert"
+        });
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "📱",
+            CallbackData = "Alert"
+        }).AddNewRow();
+
+        foreach (var item in virtualNumber)
+        {
+            inlineKeyboardMarkup.AddButton(item.CountryCode);
+            inlineKeyboardMarkup.AddButton($"{item.Count}").AddNewRow();
+        }
+
+        return inlineKeyboardMarkup;
+    }
+
+    internal static InlineKeyboardMarkup VirtualNumberPanel(IEnumerable<VirtualNumberDetails> virtualNumberDetails)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "🌎",
+            CallbackData = "Alert"
+        });
+
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "💰",
+            CallbackData = "Alert"
+        }).AddNewRow();
+
+
+        foreach (var item in virtualNumberDetails)
+        {
+            inlineKeyboardMarkup.AddButton(new()
+            {
+                Text= $"{item.Flag} {item.CountryName}",
+                CallbackData = $"Buye_{item.CountryCode}"
+            });
+            inlineKeyboardMarkup.AddButton($"{item.Price.ToString("0,000")}").AddNewRow();
+        }
+
+        return inlineKeyboardMarkup;
+    }
+
+    internal static InlineKeyboardMarkup VirtualNumberBuye(string number)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "🔢 دریافت کد",
+            CallbackData = $"GetCode_{number}"
+        }).AddNewRow();
+
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "❌ لغو",
+            CallbackData = $"Cancell_{number}"
+        }).AddNewRow();
+
+
+        return inlineKeyboardMarkup;
+    }
+
 }

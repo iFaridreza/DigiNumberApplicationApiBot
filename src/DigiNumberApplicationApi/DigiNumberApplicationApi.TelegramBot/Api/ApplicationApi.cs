@@ -176,7 +176,7 @@ public static class ApplicationApi
 
         Dictionary<string, string> queryParams = new()
         {
-            { "grant_type", "getwallet" },
+            { "grant_type", "check_wallet" },
             { "access_token", refreshToken.AccsessToken },
             { "user_token", chatId.ToString() },
             {"price" ,price.ToString() }
@@ -196,7 +196,7 @@ public static class ApplicationApi
 
         WalletInventory? walletInventory = JsonSerializer.Deserialize<WalletInventory>(responseString);
 
-        return walletInventory == null ? false : walletInventory.CheckPrice(price);
+        return walletInventory == null ? false : walletInventory.CheckPrice();
     }
 
     public static async Task<RedirectPayment> RedirectPaymentAsync(long chatId, decimal price)
