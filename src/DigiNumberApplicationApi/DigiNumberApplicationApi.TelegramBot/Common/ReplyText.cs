@@ -23,11 +23,14 @@ public static class ReplyText
     public static readonly string _verifySucsess = "<blockquote>✅ موفق</blockquote>\n\nثبت نام شما با موفقیت انجام شد";
     public static readonly string _importSessionSucsessfully = "<blockquote>✅ موفق</blockquote>\n\nافزودن سشن با موفقیت انجام شد";
     public static readonly string _reportSession = "<blockquote>✅ موفق</blockquote>\n\nگزارش سشن به شرح زیر میباشد";
+    public static readonly string _cancell = "<blockquote>✅ موفق</blockquote>\n\nعملیات با موفقیت لغو و کنسل شد";
+    public static readonly string _reportBot = "<blockquote>✅ گزارش ربات به شرح زیر میباشد</blockquote>\n\n👥 تعداد کاربر ها: <strong>{0}</strong>\n\n💰 مجموع درامد ربات: <strong>{1}</strong> تومان";
     public static readonly string _getLoginCode = "<blockquote>✅ موفق</blockquote>\n\nکد ورود با موفقیت دریافت شد❤️\n\n📱 شماره: <strong>{0}</strong>\n\n🔢 کد ورود: <code>{1}</code>\n\n🔑 در صورت نیاز به رمز دو مرحله ای میتوانید از رمز عبور زیر استفاده کنید\n<code>{2}</code>";
     public static readonly string _countryCodeAdd = "<blockquote>✅ موفق</blockquote>\n\nثبت کشور <strong>{0} {1}</strong> با موفقیت انجام شد";
     public static readonly string _showPanelLoginCode = "<blockquote>✅ موفق</blockquote>\n\nخرید با موفقیت انجام شد ✨\n\n☎️ شماره خریداری شده: <code>{0}</code>\n\n🌎 کشور: <strong>{1} {2}</strong>\n\n💰 مبلغ: <strong>{3} تومان</strong>\n\nشماره خریداری شده را فقط در تلگرام نسخه <strong>پلاس مسنجر یا تلگراف</strong> وارد کنید❗️❗️";
     public static readonly string _informashion = "<blockquote>👤 اطلاعات حساب</blockquote>\n\n✨ آیدی عددی <code>{0}</code> \n\n💰 موجودی <code>{1}</code> تومان";
     public static readonly string _codeOtp = "📮 لطفا کد sms شده را جهت احراز هویت ارسال کنید";
+    public static readonly string _alert = "❤️ این دکمه صرفا جهت نمایش است";
     public static readonly string _userChatId = "👤 لطفا ایدی عددی کاربر مورد نظر را ارسال کنید";
     public static readonly string _sendFileSession = "📁 لطفا فایل سشن را ارسال کنید و دقت کنید فرمت فایل Zip باشد";
     public static readonly string _support = "👮 جهت ارتباط با پشتیبانی دکمه زیر را لمس کنید";
@@ -39,4 +42,5 @@ public static class ReplyText
     public static readonly string _countryPrice = "<blockquote>⚠️ توجه</blockquote>\n\n👇 لطفا <strong>قیمت</strong> کشور را ارسال کنید\n\nهمین نام در پنل قابل مشاهده است";
     public static readonly string _countryCode = "<blockquote>⚠️ توجه</blockquote>\n\n👇 لطفا <strong>کد</strong> کشور را ارسال کنید\n\nهمین نام در پنل قابل مشاهده است";
     public static readonly string _rules = "<blockquote>🌹 لطفا قبل از خرید ، قوانین را مطالعه کنید</blockquote>\n\n1️⃣ لطفا طبق نیاز حساب خود را شارژ کنید برگشت مبلغ امکان پذیر نمیباشد\n\n2️⃣ لطفا حتما برای دریافت شماره مجازی از اپلیکیشن های <strong>تلگراف یا پلاس مسنجر</strong> استفاده کنید در غیر این صورت ربات مسئولیت خراب شدن شماره مجازی را نمیپذیرد\n\n3️⃣ ";
-}
+    public static readonly string _logOrder = "<blockquote>✅ گزارش خرید موفق</blockquote>\n\n👤کاربر: <strong>{0}</strong>\n\n📱شماره: <code>{1}</code>\n\n🏳️کشور: <strong>{2}</strong>\n\n💰قیمت: <strong>{3}</strong> تومان\n\n📅تاریخ: <strong>{4}</strong>\n\nدیجی نامبر فروش تخصصی شماره و خدمات مجازی تلگرام ❤️";
+} 

@@ -220,4 +220,13 @@ public static class ReplyKeyboard
         return inlineKeyboardMarkup;
     }
 
+    internal static InlineKeyboardMarkup RedirectBot(string usernameBot)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new InlineKeyboardButton("✨ ورود به ربات") { Url = $"https://t.me/{usernameBot.Replace("@", "")}" });
+
+
+        return inlineKeyboardMarkup;
+    }
 }

@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using PhoneNumbers;
 
@@ -17,6 +18,17 @@ public static class Utils
 
         Directory.CreateDirectory(dirSessionPath);
     }
+    public static string GetPersianDate(this DateTime dateTime)
+    {
+
+        PersianCalendar persianCalendar = new();
+        return new DateTime(
+            persianCalendar.GetYear(dateTime),
+            persianCalendar.GetMonth(dateTime),
+            persianCalendar.GetDayOfMonth(dateTime)
+        ).ToString("yyyy/MM/dd", CultureInfo.InvariantCulture);
+    }
+
     public static string? GetLoginCode( string lastMessage)
     {
         string pattern = @"\b\d{5}\b";
