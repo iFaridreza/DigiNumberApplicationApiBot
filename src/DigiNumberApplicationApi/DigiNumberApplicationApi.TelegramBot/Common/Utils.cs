@@ -18,6 +18,11 @@ public static class Utils
 
         Directory.CreateDirectory(dirSessionPath);
     }
+    public static bool IsNumber(string input)
+    {
+        string pattern = @"^\d+$";
+        return Regex.IsMatch(input, pattern);
+    }
     public static string GetPersianDate(this DateTime dateTime)
     {
 

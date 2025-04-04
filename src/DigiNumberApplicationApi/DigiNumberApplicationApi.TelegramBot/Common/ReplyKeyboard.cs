@@ -220,6 +220,27 @@ public static class ReplyKeyboard
         return inlineKeyboardMarkup;
     }
 
+    internal static InlineKeyboardMarkup GetLoginCode(string number)
+    {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new();
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "🔢 دریافت مجدد کد",
+            CallbackData = $"GetCodeAgain_{number}"
+        }).AddNewRow();
+
+
+        inlineKeyboardMarkup.AddButton(new()
+        {
+            Text = "❗️ خروج اکانت",
+            CallbackData = $"Logout_{number}"
+        }).AddNewRow();
+
+
+        return inlineKeyboardMarkup;
+    }
+
     internal static InlineKeyboardMarkup RedirectBot(string usernameBot)
     {
         InlineKeyboardMarkup inlineKeyboardMarkup = new();

@@ -2,7 +2,7 @@
 public static class ReplyText
 {
     public static readonly string _start = "👋🏻 سلام، به پنل اپلیکیشن شماره مجازی، دیجی نامبر خوش آمدید …\n\n😄 با اپلیکیشن دیجی نامبر به راحتی هرچه تمام می توانید شماره مجازی دریافت کنید، کاملا خودکار و بالاترین سرعت ممکن، کمترین قیمت و هــــــــزاران امکانات دیگر …\n\n⤵️ برای ادامه کار یک گزینه را انتخاب کنید:";
-    public static readonly string _sendPhone = "📱 لطفا ابتدا شماره تلفنی که در اپلیکشین ثبت نام کردید به صورت زیر ارسال کنید\n\n<blockquote>⚠️ 09150903333</blockquote>";
+    public static readonly string _sendPhone = "📱 لطفا ابتدا شماره تلفن را به صورت زیر ارسال کنید\n\n❗️❗️چنانچه در اپلیکیشن دیجی نامبر حساب دارید برای یکسان بودن موجودی میتوانید از همان شماره اپلیکیشن استفاده کنید\n\n<blockquote>⚠️ 09150903333</blockquote>";
     public static readonly string _invalidPhone = "<blockquote>❌ خطا</blockquote>\n\nشماره ارسال شده صحیح نمیباشد";
     public static readonly string _invalidCode = "<blockquote>❌ خطا</blockquote>\n\nکد ارسال شده صحیح نمیباشد";
     public static readonly string _timeLater = "<blockquote>⚠️ توجه</blockquote>\n\nربات درحال بروزرسانی میباشد لطفا بعدا تلاش کنید";
@@ -10,6 +10,7 @@ public static class ReplyText
     public static readonly string _notReciveLoginCode = "<blockquote>⚠️ توجه</blockquote>\n\nکد ورود به حساب دریافت نشد لطفا شماره خریداری شده را فقط در تلگرام نسخه <strong>پلاس مسنجر یا تلگراف</strong> وارد کنید❗️❗️";
     public static readonly string _userNotVerify = "<blockquote>⚠️ توجه</blockquote>\n\nکاربر با ایدی عددی ارسال شده وریفای نمیباشد";
     public static readonly string _firstSignup = "<blockquote>❌ خطا</blockquote>\n\nلطفا ابتدا در اپلیکیشن ثبت نام و احراز هویت کنید و سپس از خدمات ربات استفاده کنید";
+    public static readonly string _sessionTerminate = "<blockquote>❌ خطا</blockquote>\n\nربات در حساب وجود ندارد ، توسط شما خارج شده است";
     public static readonly string _importSessionFeild = "<blockquote>❌ خطا</blockquote>\n\nآپلود سشن با خطا مواجه شد احتمالا سشن تکراری وجود دارد";
     public static readonly string _invalidPrice = "<blockquote>❌ خطا</blockquote>\n\nمبلغ وارد شده اشتباه میباشد";
     public static readonly string _invalidFlag = "<blockquote>❌ خطا</blockquote>\n\nپرچم ارسال شده صحیح نمیباشد";
@@ -26,6 +27,7 @@ public static class ReplyText
     public static readonly string _cancell = "<blockquote>✅ موفق</blockquote>\n\nعملیات با موفقیت لغو و کنسل شد";
     public static readonly string _reportBot = "<blockquote>✅ گزارش ربات به شرح زیر میباشد</blockquote>\n\n👥 تعداد کاربر ها: <strong>{0}</strong>\n\n💰 مجموع درامد ربات: <strong>{1}</strong> تومان";
     public static readonly string _getLoginCode = "<blockquote>✅ موفق</blockquote>\n\nکد ورود با موفقیت دریافت شد❤️\n\n📱 شماره: <strong>{0}</strong>\n\n🔢 کد ورود: <code>{1}</code>\n\n🔑 در صورت نیاز به رمز دو مرحله ای میتوانید از رمز عبور زیر استفاده کنید\n<code>{2}</code>";
+    public static readonly string _logoutSecsess = "<blockquote>✅ موفق</blockquote>\n\nخروج از حساب با موفقیت انجام شد";
     public static readonly string _countryCodeAdd = "<blockquote>✅ موفق</blockquote>\n\nثبت کشور <strong>{0} {1}</strong> با موفقیت انجام شد";
     public static readonly string _showPanelLoginCode = "<blockquote>✅ موفق</blockquote>\n\nخرید با موفقیت انجام شد ✨\n\n☎️ شماره خریداری شده: <code>{0}</code>\n\n🌎 کشور: <strong>{1} {2}</strong>\n\n💰 مبلغ: <strong>{3} تومان</strong>\n\nشماره خریداری شده را فقط در تلگرام نسخه <strong>پلاس مسنجر یا تلگراف</strong> وارد کنید❗️❗️";
     public static readonly string _informashion = "<blockquote>👤 اطلاعات حساب</blockquote>\n\n✨ آیدی عددی <code>{0}</code> \n\n💰 موجودی <code>{1}</code> تومان";

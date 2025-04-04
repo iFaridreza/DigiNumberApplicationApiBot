@@ -95,6 +95,12 @@ public class WTelegramClientManager
         return messages.ToArray();
     }
 
+    public async Task SendMessageToContact(string contactPhone,string messageText)
+    {
+        Contacts_ResolvedPeer inputPeerUser = await _client.Contacts_ResolvePhone(contactPhone);
+        await _client.SendMessageAsync(inputPeerUser, messageText);
+    }
+
     public void Loging(Action<int, string> loging)
     {
         Helpers.Log = loging;

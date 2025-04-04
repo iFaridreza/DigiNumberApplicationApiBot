@@ -38,66 +38,91 @@ public class BotApi
 
     private async Task OnUpdate(Update update)
     {
-        if (update.CallbackQuery is null || update.CallbackQuery.Message is null || update.CallbackQuery.Message.Chat.Type != ChatType.Private)
+        Task _ = Task.Run(async () =>
         {
-            return;
-        }
-
-
-        int messageId = update.CallbackQuery.Message.MessageId;
-        long chatId = update.CallbackQuery.Message.Chat.Id;
-        string? data = update.CallbackQuery.Data;
-
-        try
-        {
-            if (string.IsNullOrEmpty(data))
+            if (update.CallbackQuery is null || update.CallbackQuery.Message is null || update.CallbackQuery.Message.Chat.Type != ChatType.Private)
             {
                 return;
             }
 
-            ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
-            IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
-            IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
-            IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
-            IVirtualNumberRepository virtualNumberRepository = _serviceProvider.GetRequiredService<IVirtualNumberRepository>();
-            IVirtualSessionDetailsRepository virtualSessionDetailsRepository = _serviceProvider.GetRequiredService<IVirtualSessionDetailsRepository>();
-            IOrderVirtualNumberRepository orderVirtualNumberRepository = _serviceProvider.GetRequiredService<IOrderVirtualNumberRepository>();
 
-            bool anySudo = await sudoRepository.Any(chatId);
+            int messageId = update.CallbackQuery.Message.MessageId;
+            long chatId = update.CallbackQuery.Message.Chat.Id;
+            string? data = update.CallbackQuery.Data;
 
-            if (data == "Alert")
+            try
             {
-                await _telegramBotClient.AnswerCallbackQuery(update.CallbackQuery.Id, ReplyText._alert, showAlert: true);
-                return;
-            }
-
-            if (anySudo)
-            {
-                if (data.Equals("AddCountry"))
+                if (string.IsNullOrEmpty(data))
                 {
-                    _logger.Information($"Sudo {chatId} افزودن کشور ➕");
-
-                    bool anyStep = await userStepRepository.Any(chatId);
-
-                    if (anyStep)
-                    {
-                        UserStep userStep = await userStepRepository.Get(chatId);
-                        await userStepRepository.Remove(userStep);
-                    }
-
-                    await userStepRepository.Create(new()
-                    {
-                        ChatId = chatId,
-                        ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
-                        Step = "CountryCode"
-                    });
-
-                    await _telegramBotClient.DeleteMessage(chatId, messageId);
-                    await _telegramBotClient.SendMessage(chatId, ReplyText._countryCode, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+                    return;
                 }
-                else if (data.Contains("Remove_"))
+
+                ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
+                IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
+                IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
+                IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
+                IVirtualNumberRepository virtualNumberRepository = _serviceProvider.GetRequiredService<IVirtualNumberRepository>();
+                IVirtualSessionDetailsRepository virtualSessionDetailsRepository = _serviceProvider.GetRequiredService<IVirtualSessionDetailsRepository>();
+                IOrderVirtualNumberRepository orderVirtualNumberRepository = _serviceProvider.GetRequiredService<IOrderVirtualNumberRepository>();
+
+                bool anySudo = await sudoRepository.Any(chatId);
+
+                if (data == "Alert")
                 {
-                    string countryCode = data.Replace("Remove_", "").Replace(" ", "");
+                    await _telegramBotClient.AnswerCallbackQuery(update.CallbackQuery.Id, ReplyText._alert, showAlert: true);
+                    return;
+                }
+
+                if (anySudo)
+                {
+                    if (data.Equals("AddCountry"))
+                    {
+                        _logger.Information($"Sudo {chatId} افزودن کشور ➕");
+
+                        bool anyStep = await userStepRepository.Any(chatId);
+
+                        if (anyStep)
+                        {
+                            UserStep userStep = await userStepRepository.Get(chatId);
+                            await userStepRepository.Remove(userStep);
+                        }
+
+                        await userStepRepository.Create(new()
+                        {
+                            ChatId = chatId,
+                            ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                            Step = "CountryCode"
+                        });
+
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._countryCode, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+                    }
+                    else if (data.Contains("Remove_"))
+                    {
+                        string countryCode = data.Replace("Remove_", "").Replace(" ", "");
+
+                        bool anyCountryCode = await virtualNumberDetailsRepository.Any(countryCode);
+
+                        if (!anyCountryCode)
+                        {
+                            return;
+                        }
+
+                        VirtualNumberDetails virtualNumberDetails = await virtualNumberDetailsRepository.Get(countryCode);
+
+                        await virtualNumberDetailsRepository.Remove(virtualNumberDetails);
+
+                        IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
+
+
+                        await _telegramBotClient.EditMessageText(chatId, messageId, ReplyText._countryList, replyMarkup: ReplyKeyboard.CountryListEditor(countrys));
+                    }
+                    return;
+                }
+
+                if (data.Contains("Buye_"))
+                {
+                    string countryCode = data.Replace("Buye_", "").Replace(" ", "");
 
                     bool anyCountryCode = await virtualNumberDetailsRepository.Any(countryCode);
 
@@ -108,80 +133,163 @@ public class BotApi
 
                     VirtualNumberDetails virtualNumberDetails = await virtualNumberDetailsRepository.Get(countryCode);
 
-                    await virtualNumberDetailsRepository.Remove(virtualNumberDetails);
+                    bool walletBalance = await ApplicationApi.WalletInventoryAsync(chatId, virtualNumberDetails.Price);
 
-                    IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
+                    if (!walletBalance)
+                    {
+                        RedirectPayment redierctPayment = await ApplicationApi.RedirectPaymentAsync(chatId, virtualNumberDetails.Price);
+                        await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._notBalance, virtualNumberDetails.Flag, virtualNumberDetails.CountryName), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Payment(redierctPayment.Message));
+                        return;
+                    }
+
+                    VirtualSessionDetails virtualSessionDetails = await virtualSessionDetailsRepository.Get();
+
+                    IEnumerable<VirtualNumber> virtualNumbers = await virtualNumberRepository.GetAll(EStatusOrder.Avilbale);
+
+                    virtualNumbers = virtualNumbers.Where(x => x.CountryCode == virtualNumberDetails.CountryCode);
+
+                    if (virtualNumbers.Count() == default)
+                    {
+                        _logger.Warning($"Session {countryCode} Not Availbale");
+                        await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._notAvailbale, virtualNumberDetails.Flag, virtualNumberDetails.CountryName), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                        return;
+                    }
+
+                    Message msgWite = await _telegramBotClient.SendMessage(chatId, ReplyText._wite, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
+
+                    const string telegramContact = "+42777";
+                    WTelegramClientManager wTelegramClientManager = new(virtualSessionDetails.ApiId, virtualSessionDetails.ApiHash, Utils.GetSessionsDirPath(_appSettings.SessionPath));
+
+                    VirtualNumber? virtualNumber = null;
+
+                    foreach (var item in virtualNumbers)
+                    {
+                        try
+                        {
+                            await wTelegramClientManager.Connect($"{item.CountryCode}{item.Number}");
+
+                            wTelegramClientManager.Loging((_, msg) =>
+                            {
+                                _logger.Information(msg);
+                            });
 
 
-                    await _telegramBotClient.EditMessageText(chatId, messageId, ReplyText._countryList, replyMarkup: ReplyKeyboard.CountryListEditor(countrys));
+                            wTelegramClientManager.DisableUpdate();
+
+                            await wTelegramClientManager.SendMessageToContact(telegramContact, "~ Hi");
+
+                            virtualNumber = item;
+
+                            item.EStatusOrder = EStatusOrder.Sold;
+
+                            await virtualNumberRepository.Update(item);
+
+                            await wTelegramClientManager.Disconnect();
+
+                            break;
+                        }
+                        catch (Exception ex) when (
+                                         ex.Message == "AUTH_KEY_UNREGISTERED" ||
+                                         ex.Message == "USER_DEACTIVATED" ||
+                                         ex.Message == "SESSION_REVOKED" ||
+                                         ex.Message == "SESSION_EXPIRED" ||
+                                         ex.Message == "USER_DEACTIVATED_BAN"
+                                         )
+                        {
+                            item.EStatusOrder = EStatusOrder.Ban;
+
+                            await virtualNumberRepository.Update(item);
+                        }
+                    }
+
+                    if (virtualNumber is null)
+                    {
+                        _logger.Warning($"Session {countryCode} Not Availbale");
+                        await _telegramBotClient.DeleteMessage(chatId, msgWite.MessageId);
+                        await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._notAvailbale, virtualNumberDetails.Flag, virtualNumberDetails.CountryName), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                        return;
+                    }
+
+                    await _telegramBotClient.DeleteMessage(chatId, msgWite.MessageId);
+                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._showPanelLoginCode, $"{virtualNumberDetails.CountryCode}{virtualNumber.Number}", virtualNumberDetails.Flag, virtualNumberDetails.CountryName, virtualNumberDetails.Price.ToString("0,000")), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.VirtualNumberBuye(virtualNumber.Number));
                 }
-                return;
-            }
-
-            if (data.Contains("Buye_"))
-            {
-                string countryCode = data.Replace("Buye_", "").Replace(" ", "");
-
-                bool anyCountryCode = await virtualNumberDetailsRepository.Any(countryCode);
-
-                if (!anyCountryCode)
+                else if (data.Contains("GetCode_"))
                 {
-                    return;
-                }
+                    string number = data.Replace("GetCode_", "").Replace(" ", "");
 
-                VirtualNumberDetails virtualNumberDetails = await virtualNumberDetailsRepository.Get(countryCode);
+                    bool anyNumber = await virtualNumberRepository.Any(number);
 
-                bool walletBalance = await ApplicationApi.WalletInventoryAsync(chatId, virtualNumberDetails.Price);
+                    if (!anyNumber)
+                    {
+                        return;
+                    }
 
-                if (!walletBalance)
-                {
-                    RedirectPayment redierctPayment = await ApplicationApi.RedirectPaymentAsync(chatId, virtualNumberDetails.Price);
-                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._notBalance, virtualNumberDetails.Flag, virtualNumberDetails.CountryName), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Payment(redierctPayment.Message));
-                    return;
-                }
+                    Message editButton = await _telegramBotClient.EditMessageReplyMarkup(chatId, messageId, null);
 
-                VirtualSessionDetails virtualSessionDetails = await virtualSessionDetailsRepository.Get();
+                    VirtualNumber virtualNumber = await virtualNumberRepository.Get(number);
 
-                IEnumerable<VirtualNumber> virtualNumbers = await virtualNumberRepository.GetAll(EStatusOrder.Avilbale);
+                    WTelegramClientManager wTelegramClientManager = new(virtualNumber.VirtualSessionDetails.ApiId, virtualNumber.VirtualSessionDetails.ApiHash, Utils.GetSessionsDirPath(_appSettings.SessionPath));
 
-                virtualNumbers = virtualNumbers.Where(x => x.CountryCode == virtualNumberDetails.CountryCode);
-
-                if (virtualNumbers.Count() == default)
-                {
-                    _logger.Warning($"Session {countryCode} Not Availbale");
-                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._notAvailbale, virtualNumberDetails.Flag, virtualNumberDetails.CountryName), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                    return;
-                }
-
-                Message msgWite = await _telegramBotClient.SendMessage(chatId, ReplyText._wite, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
-
-                WTelegramClientManager wTelegramClientManager = new(virtualSessionDetails.ApiId, virtualSessionDetails.ApiHash, Utils.GetSessionsDirPath(_appSettings.SessionPath));
-
-                VirtualNumber? virtualNumber = null;
-
-                foreach (var item in virtualNumbers)
-                {
                     try
                     {
-                        await wTelegramClientManager.Connect($"{item.CountryCode}{item.Number}");
+                        await wTelegramClientManager.Connect($"{virtualNumber.CountryCode}{virtualNumber.Number}");
 
                         wTelegramClientManager.Loging((_, msg) =>
                         {
                             _logger.Information(msg);
                         });
 
-
                         wTelegramClientManager.DisableUpdate();
 
-                        virtualNumber = item;
+                        const string telegramContact = "+42777";
+                        string[] messages = await wTelegramClientManager.GetMessagesText(telegramContact, 1);
 
-                        item.EStatusOrder = EStatusOrder.Sold;
+                        if (messages.Length == 0)
+                        {
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._notReciveLoginCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
+                            return;
+                        }
 
-                        await virtualNumberRepository.Update(item);
+                        string? loginCode = Utils.GetLoginCode(messages[0]);
 
-                        await wTelegramClientManager.Disconnect();
+                        if (string.IsNullOrEmpty(loginCode))
+                        {
+                            await _telegramBotClient.EditMessageReplyMarkup(chatId, editButton.MessageId, ReplyKeyboard.VirtualNumberBuye(virtualNumber.Number));
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._notReciveLoginCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
+                            return;
+                        }
 
-                        break;
+                        VirtualNumberDetails virtualNumberDetails = await virtualNumberDetailsRepository.Get(virtualNumber.CountryCode);
+
+                        bool anyWidthraw = await ApplicationApi.WalletWitdhra(chatId, virtualNumberDetails.Price);
+
+                        if (!anyWidthraw)
+                        {
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                            return;
+                        }
+
+                        User user = await userRepository.Get(chatId);
+
+                        await orderVirtualNumberRepository.Add(new()
+                        {
+                            User = user,
+                            VirtualNumber = virtualNumber,
+                            Price = virtualNumberDetails.Price,
+                            Date = DateTime.Now.GetPersianDate()
+                        });
+
+                        await wTelegramClientManager.ChangeOrDisablePassword2Fa(_appSettings.Password2Fa, null);
+
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._getLoginCode, $"{virtualNumber.CountryCode}{virtualNumber.Number}", loginCode, _appSettings.Password2Fa), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.GetLoginCode(virtualNumber.Number));
+                        await _telegramBotClient.SendMessage(_appSettings.UsernameOrderLog, string.Format(ReplyText._logOrder,
+                                                                                                    string.Join("", chatId.ToString().Substring(0, 5), "****"),
+                                                                                                    string.Join("", $"{virtualNumber.CountryCode}{virtualNumber.Number}".Substring(0, 8), "****"),
+                                                                                                    $"{virtualNumberDetails.Flag} {virtualNumberDetails.CountryName}",
+                                                                                                    virtualNumberDetails.Price.ToString("0,000"),
+                                                                                                    DateTime.Now.GetPersianDate()
+                                                                                                    ), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.RedirectBot(_appSettings.UsernameBot.Replace("@", "")));
                     }
                     catch (Exception ex) when (
                                      ex.Message == "AUTH_KEY_UNREGISTERED" ||
@@ -191,604 +299,638 @@ public class BotApi
                                      ex.Message == "USER_DEACTIVATED_BAN"
                                      )
                     {
-                        item.EStatusOrder = EStatusOrder.Ban;
+                        virtualNumber.EStatusOrder = EStatusOrder.Ban;
+                        await virtualNumberRepository.Update(virtualNumber);
 
-                        await virtualNumberRepository.Update(item);
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._numberDeleted, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+
+                    }
+                    finally
+                    {
+                        await wTelegramClientManager.Disconnect();
                     }
                 }
-
-                if (virtualNumber is null)
+                else if (data.Contains("GetCodeAgain_"))
                 {
-                    _logger.Warning($"Session {countryCode} Not Availbale");
-                    await _telegramBotClient.DeleteMessage(chatId, msgWite.MessageId);
-                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._notAvailbale, virtualNumberDetails.Flag, virtualNumberDetails.CountryName), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                    return;
-                }
+                    string number = data.Replace("GetCodeAgain_", "").Replace(" ", "");
 
-                await _telegramBotClient.DeleteMessage(chatId, msgWite.MessageId);
-                await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._showPanelLoginCode, $"{virtualNumberDetails.CountryCode}{virtualNumber.Number}", virtualNumberDetails.Flag, virtualNumberDetails.CountryName, virtualNumberDetails.Price.ToString("0,000")), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.VirtualNumberBuye(virtualNumber.Number));
-            }
-            else if (data.Contains("GetCode_"))
-            {
-                string number = data.Replace("GetCode_", "").Replace(" ", "");
+                    bool anyNumber = await virtualNumberRepository.Any(number);
 
-                bool anyNumber = await virtualNumberRepository.Any(number);
-
-                if (!anyNumber)
-                {
-                    return;
-                }
-
-                Message editButton = await _telegramBotClient.EditMessageReplyMarkup(chatId, messageId, null);
-
-                VirtualNumber virtualNumber = await virtualNumberRepository.Get(number);
-
-                WTelegramClientManager wTelegramClientManager = new(virtualNumber.VirtualSessionDetails.ApiId, virtualNumber.VirtualSessionDetails.ApiHash, Utils.GetSessionsDirPath(_appSettings.SessionPath));
-
-                try
-                {
-                    await wTelegramClientManager.Connect($"{virtualNumber.CountryCode}{virtualNumber.Number}");
-
-                    wTelegramClientManager.Loging((_, msg) =>
+                    if (!anyNumber)
                     {
-                        _logger.Information(msg);
-                    });
-
-                    wTelegramClientManager.DisableUpdate();
-
-                    const string telegramContact = "+42777";
-                    string[] messages = await wTelegramClientManager.GetMessagesText(telegramContact, 1);
-
-                    if (messages.Length == 0)
-                    {
-                        await _telegramBotClient.SendMessage(chatId, ReplyText._notReciveLoginCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
                         return;
                     }
 
-                    string? loginCode = Utils.GetLoginCode(messages[0]);
+                    Message editButton = await _telegramBotClient.EditMessageReplyMarkup(chatId, messageId, null);
 
-                    if (string.IsNullOrEmpty(loginCode))
+                    VirtualNumber virtualNumber = await virtualNumberRepository.Get(number);
+
+                    WTelegramClientManager wTelegramClientManager = new(virtualNumber.VirtualSessionDetails.ApiId, virtualNumber.VirtualSessionDetails.ApiHash, Utils.GetSessionsDirPath(_appSettings.SessionPath));
+
+                    try
                     {
-                        await _telegramBotClient.EditMessageReplyMarkup(chatId, editButton.MessageId, ReplyKeyboard.VirtualNumberBuye(virtualNumber.Number));
-                        await _telegramBotClient.SendMessage(chatId, ReplyText._notReciveLoginCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
-                        return;
+                        await wTelegramClientManager.Connect($"{virtualNumber.CountryCode}{virtualNumber.Number}");
+
+                        wTelegramClientManager.Loging((_, msg) =>
+                        {
+                            _logger.Information(msg);
+                        });
+
+                        wTelegramClientManager.DisableUpdate();
+
+                        const string telegramContact = "+42777";
+                        string[] messages = await wTelegramClientManager.GetMessagesText(telegramContact, 1);
+
+                        if (messages.Length == 0)
+                        {
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._notReciveLoginCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
+                            return;
+                        }
+
+                        string? loginCode = Utils.GetLoginCode(messages[0]);
+
+                        if (string.IsNullOrEmpty(loginCode))
+                        {
+                            await _telegramBotClient.EditMessageReplyMarkup(chatId, editButton.MessageId, ReplyKeyboard.VirtualNumberBuye(virtualNumber.Number));
+                            await _telegramBotClient.SendMessage(chatId, ReplyText._notReciveLoginCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Remove());
+                            return;
+                        }
+
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._getLoginCode, $"{virtualNumber.CountryCode}{virtualNumber.Number}", loginCode, _appSettings.Password2Fa), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.GetLoginCode(virtualNumber.Number));
                     }
-
-                    VirtualNumberDetails virtualNumberDetails = await virtualNumberDetailsRepository.Get(virtualNumber.CountryCode);
-
-                    bool anyWidthraw = await ApplicationApi.WalletWitdhra(chatId, virtualNumberDetails.Price);
-
-                    if (!anyWidthraw)
+                    catch (Exception ex) when (
+                                     ex.Message == "USER_DEACTIVATED" ||
+                                     ex.Message == "SESSION_REVOKED" ||
+                                     ex.Message == "SESSION_EXPIRED" ||
+                                     ex.Message == "USER_DEACTIVATED_BAN"
+                                     )
                     {
-                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                        return;
+                        virtualNumber.EStatusOrder = EStatusOrder.Ban;
+                        await virtualNumberRepository.Update(virtualNumber);
+
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._numberDeleted, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+
                     }
-
-                    User user = await userRepository.Get(chatId);
-
-                    await orderVirtualNumberRepository.Add(new()
+                    catch (Exception ex) when (ex.Message == "AUTH_KEY_UNREGISTERED")
                     {
-                        User = user,
-                        VirtualNumber = virtualNumber,
-                        Price = virtualNumberDetails.Price,
-                        Date = DateTime.Now.GetPersianDate()
-                    });
-
-                    await wTelegramClientManager.ChangeOrDisablePassword2Fa(_appSettings.Password2Fa, null);
-
-                    await _telegramBotClient.DeleteMessage(chatId, messageId);
-                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._getLoginCode, $"{virtualNumber.CountryCode}{virtualNumber.Number}", loginCode, _appSettings.Password2Fa), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
-                    await _telegramBotClient.SendMessage(_appSettings.UsernameOrderLog, string.Format(ReplyText._logOrder,
-                                                                                                string.Join("", chatId.ToString().Substring(0, 5), "****"),
-                                                                                                string.Join("", $"{virtualNumber.CountryCode}{virtualNumber.Number}".Substring(0, 8), "****"),
-                                                                                                $"{virtualNumberDetails.Flag} {virtualNumberDetails.CountryName}",
-                                                                                                virtualNumberDetails.Price.ToString("0,000"),
-                                                                                                DateTime.Now.GetPersianDate()
-                                                                                                ), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.RedirectBot(_appSettings.UsernameBot.Replace("@", "")));
-
-                    await wTelegramClientManager.Logout();
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._sessionTerminate, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+                    }
+                    finally
+                    {
+                        await wTelegramClientManager.Disconnect();
+                    }
                 }
-                catch (Exception ex) when (
-                                 ex.Message == "AUTH_KEY_UNREGISTERED" ||
-                                 ex.Message == "USER_DEACTIVATED" ||
-                                 ex.Message == "SESSION_REVOKED" ||
-                                 ex.Message == "SESSION_EXPIRED" ||
-                                 ex.Message == "USER_DEACTIVATED_BAN"
-                                 )
+                else if (data.Contains("Logout_"))
                 {
-                    virtualNumber.EStatusOrder = EStatusOrder.Ban;
+                    string number = data.Replace("Logout_", "").Replace(" ", "");
+
+                    bool anyNumber = await virtualNumberRepository.Any(number);
+
+                    if (!anyNumber)
+                    {
+                        return;
+                    }
+
+                    Message editButton = await _telegramBotClient.EditMessageReplyMarkup(chatId, messageId, null);
+
+                    VirtualNumber virtualNumber = await virtualNumberRepository.Get(number);
+
+                    WTelegramClientManager wTelegramClientManager = new(virtualNumber.VirtualSessionDetails.ApiId, virtualNumber.VirtualSessionDetails.ApiHash, Utils.GetSessionsDirPath(_appSettings.SessionPath));
+
+                    try
+                    {
+                        await wTelegramClientManager.Connect($"{virtualNumber.CountryCode}{virtualNumber.Number}");
+
+                        wTelegramClientManager.Loging((_, msg) =>
+                        {
+                            _logger.Information(msg);
+                        });
+
+                        await wTelegramClientManager.Logout();
+
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._logoutSecsess, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+                    }
+                    catch (Exception ex) when (
+                                     ex.Message == "USER_DEACTIVATED" ||
+                                     ex.Message == "SESSION_REVOKED" ||
+                                     ex.Message == "SESSION_EXPIRED" ||
+                                     ex.Message == "USER_DEACTIVATED_BAN"
+                                     )
+                    {
+                        virtualNumber.EStatusOrder = EStatusOrder.Ban;
+                        await virtualNumberRepository.Update(virtualNumber);
+
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._numberDeleted, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+
+                    }
+                    catch (Exception ex) when (ex.Message == "AUTH_KEY_UNREGISTERED")
+                    {
+                        await _telegramBotClient.DeleteMessage(chatId, messageId);
+                        await _telegramBotClient.SendMessage(chatId, ReplyText._sessionTerminate, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+                    }
+                    finally
+                    {
+                        await wTelegramClientManager.Disconnect();
+                    }
+                }
+                else if (data.Contains("Cancell_"))
+                {
+                    string number = data.Replace("Cancell_", "").Replace(" ", "");
+
+                    bool anyNumber = await virtualNumberRepository.Any(number);
+
+                    if (!anyNumber)
+                    {
+                        return;
+                    }
+
+                    Message editButton = await _telegramBotClient.EditMessageReplyMarkup(chatId, messageId, null);
+
+                    VirtualNumber virtualNumber = await virtualNumberRepository.Get(number);
+
+                    virtualNumber.EStatusOrder = EStatusOrder.Avilbale;
+
                     await virtualNumberRepository.Update(virtualNumber);
 
-                    await _telegramBotClient.DeleteMessage(chatId, messageId);
-                    await _telegramBotClient.SendMessage(chatId, ReplyText._numberDeleted, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
-
+                    await _telegramBotClient.DeleteMessage(chatId, editButton.MessageId);
+                    await _telegramBotClient.SendMessage(chatId, ReplyText._cancell, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
                 }
             }
-            else if (data.Contains("Cancell_"))
+            catch (Exception ex)
             {
-                string number = data.Replace("Cancell_", "").Replace(" ", "");
+                _logger.Error(ex, "❌ Error");
 
-                bool anyNumber = await virtualNumberRepository.Any(number);
+                ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
+                IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
 
-                if (!anyNumber)
+                bool anySudo = await sudoRepository.Any(chatId);
+
+                if (anySudo)
                 {
+                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeSudo());
                     return;
                 }
 
-                Message editButton = await _telegramBotClient.EditMessageReplyMarkup(chatId, messageId, null);
+                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
 
-                VirtualNumber virtualNumber = await virtualNumberRepository.Get(number);
+                bool anyStep = await userStepRepository.Any(chatId);
+                if (anyStep)
+                {
+                    UserStep userStep = await userStepRepository.Get(chatId);
+                    await userStepRepository.Remove(userStep);
+                }
 
-                virtualNumber.EStatusOrder = EStatusOrder.Avilbale;
-
-                await virtualNumberRepository.Update(virtualNumber);
-
-                await _telegramBotClient.DeleteMessage(chatId, editButton.MessageId);
-                await _telegramBotClient.SendMessage(chatId, ReplyText._cancell, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+                CashManager.Remove(chatId);
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "❌ Error");
+        });
 
-            ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
-            IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
-
-            bool anySudo = await sudoRepository.Any(chatId);
-
-            if (anySudo)
-            {
-                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeSudo());
-                return;
-            }
-
-            await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
-
-            bool anyStep = await userStepRepository.Any(chatId);
-            if (anyStep)
-            {
-                UserStep userStep = await userStepRepository.Get(chatId);
-                await userStepRepository.Remove(userStep);
-            }
-
-            CashManager.Remove(chatId);
-        }
+        await Task.CompletedTask;
     }
 
     private async Task OnMessage(Message message, UpdateType type)
     {
-        long chatId = message.Chat.Id;
-
-        try
+        Task _ = Task.Run(async () =>
         {
-           await _telegramBotClient.SendChatAction(chatId, ChatAction.Typing);
+            long chatId = message.Chat.Id;
 
-            if (message.Type == MessageType.Text)
+            try
             {
-                string? text = message.Text;
+                await _telegramBotClient.SendChatAction(chatId, ChatAction.Typing);
 
-                if (string.IsNullOrEmpty(text)) return;
-
-                int messageId = message.MessageId;
-
-                switch (text)
+                if (message.Type == MessageType.Text)
                 {
-                    case "/start":
-                        {
-                            await OnStart(message, chatId);
-                        }
-                        break;
-                    case "👤 حساب کاربری":
-                        {
-                            await OnInfo(message, chatId);
-                        }
-                        break;
-                    case "♻️ استعلام شماره":
-                        {
-                            await OnAvailableCountry(message, chatId);
-                        }
-                        break;
-                    case "🛍 خرید شماره مجازی":
-                        {
-                            await OnBuyeVirtualNunber(message, chatId);
-                        }
-                        break;
-                    case "🔖 قوانین":
-                        {
-                            await OnRules(message, chatId);
-                        }
-                        break;
-                    case "☎️ پشتیبانی":
-                        {
-                            await OnSupport(message, chatId);
-                        }
-                        break;
-                    case "📋 لیست کشور":
-                        {
-                            await OnListCountry(message, chatId);
-                        }
-                        break;
-                    case "👤 گزارش کاربر":
-                        {
-                            await OnInfoUser(message, chatId);
-                        }
-                        break;
-                    case "📥 آپلود سشن":
-                        {
-                            await OnUploadSession(message, chatId);
-                        }
-                        break;
-                    case "📊 گزارش سشن":
-                        {
-                            await OnReportSession(message, chatId);
-                        }
-                        break;
-                    case "🔙":
-                        {
-                            await OnBack(message, chatId);
-                        }
-                        break;
-                    case "📈 گزارش ربات":
-                        {
-                            await OnReportBot(message, chatId);
-                        }
-                        break;
-                    default:
-                        {
-                            IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
-                            IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
-                            ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
-                            IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
+                    string? text = message.Text;
 
-                            bool anyStep = await userStepRepository.Any(chatId);
+                    if (string.IsNullOrEmpty(text)) return;
 
-                            if (!anyStep)
+                    int messageId = message.MessageId;
+
+                    switch (text)
+                    {
+                        case "/start":
                             {
-                                return;
+                                await OnStart(message, chatId);
                             }
-
-                            UserStep userStep = await userStepRepository.Get(chatId);
-
-                            string step = userStep.Step;
-
-                            if (step == "Phone")
+                            break;
+                        case "👤 حساب کاربری":
                             {
-                                string phone = text.Replace(" ", "");
+                                await OnInfo(message, chatId);
+                            }
+                            break;
+                        case "♻️ استعلام شماره":
+                            {
+                                await OnAvailableCountry(message, chatId);
+                            }
+                            break;
+                        case "🛍 خرید شماره مجازی":
+                            {
+                                await OnBuyeVirtualNunber(message, chatId);
+                            }
+                            break;
+                        case "🔖 قوانین":
+                            {
+                                await OnRules(message, chatId);
+                            }
+                            break;
+                        case "☎️ پشتیبانی":
+                            {
+                                await OnSupport(message, chatId);
+                            }
+                            break;
+                        case "📋 لیست کشور":
+                            {
+                                await OnListCountry(message, chatId);
+                            }
+                            break;
+                        case "👤 گزارش کاربر":
+                            {
+                                await OnInfoUser(message, chatId);
+                            }
+                            break;
+                        case "📥 آپلود سشن":
+                            {
+                                await OnUploadSession(message, chatId);
+                            }
+                            break;
+                        case "📊 گزارش سشن":
+                            {
+                                await OnReportSession(message, chatId);
+                            }
+                            break;
+                        case "🔙":
+                            {
+                                await OnBack(message, chatId);
+                            }
+                            break;
+                        case "📈 گزارش ربات":
+                            {
+                                await OnReportBot(message, chatId);
+                            }
+                            break;
+                        default:
+                            {
+                                IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
+                                IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
+                                ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
+                                IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
 
-                                bool isValid = Utils.IsValidPhone(phone);
+                                bool anyStep = await userStepRepository.Any(chatId);
 
-                                if (!isValid)
+                                if (!anyStep)
                                 {
-                                    _logger.Information($"User {chatId} Phone Invalid");
-
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._invalidPhone, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
                                     return;
                                 }
 
-                                bool isVerifyUser = await ApplicationApi.VerifyUserAsync(chatId, phone);
+                                UserStep userStep = await userStepRepository.Get(chatId);
 
-                                if (isVerifyUser)
+                                string step = userStep.Step;
+
+                                if (step == "Phone")
                                 {
+                                    string phone = text.Replace(" ", "");
+
+                                    bool isValid = Utils.IsValidPhone(phone);
+
+                                    if (!isValid)
+                                    {
+                                        _logger.Information($"User {chatId} Phone Invalid");
+
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._invalidPhone, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                                        return;
+                                    }
+
+                                    bool isVerifyUser = await ApplicationApi.VerifyUserAsync(chatId, phone);
+
+                                    if (isVerifyUser)
+                                    {
+                                        User user = await userRepository.Get(chatId);
+
+                                        user.PhoneNumber = phone;
+                                        user.IsVerify = true;
+
+                                        await userRepository.Update(user);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._verifySucsess, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+
+                                        return;
+                                    }
+
+                                    RegisterUser registerUser = await ApplicationApi.RegisterUserOTPAsync(chatId, text);
+
+                                    if (!registerUser.Status)
+                                    {
+                                        _logger.Information($"User {chatId} RegisterUser Status False");
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                                        return;
+                                    }
+
+                                    CashSession cashSession = new();
+                                    cashSession.keyValuePairs.Add("CodeToken", registerUser.CodeToken);
+                                    cashSession.keyValuePairs.Add("Phone", phone);
+                                    CashManager.AddOrUpdate(chatId, cashSession);
+
+                                    await userStepRepository.Remove(userStep);
+                                    await userStepRepository.Create(new()
+                                    {
+                                        ChatId = chatId,
+                                        ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                        Step = "Code"
+                                    });
+
+                                    _logger.Information($"User {chatId} Send Otp Code");
+
+                                    await _telegramBotClient.SendMessage(chatId, ReplyText._codeOtp, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Back());
+                                }
+                                else if (step == "Code")
+                                {
+                                    string code = text.Replace(" ", "");
+
+                                    bool isValid = Utils.IsNumber(code);
+
+                                    if (!isValid || code.Length != 5)
+                                    {
+                                        _logger.Information($"User {chatId} Code Invalid");
+                                        CashManager.Remove(chatId);
+
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._invalidCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                                        return;
+                                    }
+
+                                    CashSession? cashSession = CashManager.Get(chatId);
+
+                                    if (cashSession is null)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                                        return;
+                                    }
+
+                                    cashSession.keyValuePairs.TryGetValue("CodeToken", out string? codeToken);
+                                    cashSession.keyValuePairs.TryGetValue("Phone", out string? phone);
+
+                                    if (string.IsNullOrEmpty(codeToken) || string.IsNullOrEmpty(phone))
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                                        return;
+                                    }
+
+                                    bool verifyState = await ApplicationApi.VerifyUserOTPAsync(chatId, phone, code, codeToken);
+
+                                    if (!verifyState)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._invalidCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
+                                        return;
+                                    }
+
                                     User user = await userRepository.Get(chatId);
 
                                     user.PhoneNumber = phone;
                                     user.IsVerify = true;
 
                                     await userRepository.Update(user);
+
+                                    await userStepRepository.Remove(userStep);
+                                    CashManager.Remove(chatId);
+
+                                    _logger.Information($"User {chatId} Verify Sucsess");
+
                                     await _telegramBotClient.SendMessage(chatId, ReplyText._verifySucsess, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-
-                                    return;
                                 }
-
-                                RegisterUser registerUser = await ApplicationApi.RegisterUserOTPAsync(chatId, text);
-
-                                if (!registerUser.Status)
+                                else if (step == "CountryCode")
                                 {
-                                    _logger.Information($"User {chatId} RegisterUser Status False");
+                                    _logger.Information($"Sudo {chatId} {text}");
+
+                                    bool anyCountryCode = await virtualNumberDetailsRepository.Any(text);
+
+                                    if (anyCountryCode)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._countryCodeExists, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    CashSession cashSession = new();
+                                    cashSession.keyValuePairs.Add("CountryCode", text);
+
+                                    CashManager.AddOrUpdate(chatId, cashSession);
+
                                     await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                                    return;
+
+                                    await userStepRepository.Create(new()
+                                    {
+                                        ChatId = chatId,
+                                        ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                        Step = "CountryName"
+                                    });
+
+                                    await _telegramBotClient.SendMessage(chatId, ReplyText._countryName, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+
                                 }
-
-                                CashSession cashSession = new();
-                                cashSession.keyValuePairs.Add("CodeToken", registerUser.CodeToken);
-                                cashSession.keyValuePairs.Add("Phone", phone);
-                                CashManager.AddOrUpdate(chatId, cashSession);
-
-                                await userStepRepository.Remove(userStep);
-                                await userStepRepository.Create(new()
+                                else if (step == "CountryName")
                                 {
-                                    ChatId = chatId,
-                                    ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
-                                    Step = "Code"
-                                });
+                                    _logger.Information($"Sudo {chatId} {text}");
 
-                                _logger.Information($"User {chatId} Send Otp Code");
+                                    CashSession? cashSession = CashManager.Get(chatId);
 
-                                await _telegramBotClient.SendMessage(chatId, ReplyText._codeOtp, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.Back());
+                                    if (cashSession is null)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    cashSession.keyValuePairs.Add("CountryName", text);
+                                    CashManager.AddOrUpdate(chatId, cashSession);
+
+                                    await userStepRepository.Remove(userStep);
+
+                                    await userStepRepository.Create(new()
+                                    {
+                                        ChatId = chatId,
+                                        ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                        Step = "CountryFlag"
+                                    });
+
+                                    await _telegramBotClient.SendMessage(chatId, ReplyText._countryFlag, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+                                }
+                                else if (step == "CountryFlag")
+                                {
+                                    _logger.Information($"Sudo {chatId} {text}");
+
+                                    bool isFlag = Utils.IsFlagCountry(text);
+
+                                    if (!isFlag)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._invalidFlag, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    CashSession? cashSession = CashManager.Get(chatId);
+
+                                    if (cashSession is null)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    cashSession.keyValuePairs.Add("CountryFlag", text);
+
+                                    CashManager.AddOrUpdate(chatId, cashSession);
+
+                                    await userStepRepository.Remove(userStep);
+
+                                    await userStepRepository.Create(new()
+                                    {
+                                        ChatId = chatId,
+                                        ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
+                                        Step = "CountryPrice"
+                                    });
+
+                                    await _telegramBotClient.SendMessage(chatId, ReplyText._countryPrice, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
+                                }
+                                else if (step == "CountryPrice")
+                                {
+                                    _logger.Information($"Sudo {chatId} {text}");
+
+                                    if (!decimal.TryParse(text, out decimal countryPrice))
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._invalidPrice, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    CashSession? cashSession = CashManager.Get(chatId);
+
+                                    if (cashSession is null)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    cashSession.keyValuePairs.TryGetValue("CountryName", out string? countryName);
+                                    cashSession.keyValuePairs.TryGetValue("CountryFlag", out string? countryFlag);
+                                    cashSession.keyValuePairs.TryGetValue("CountryCode", out string? countryCode);
+
+                                    if (string.IsNullOrEmpty(countryName) ||
+                                       string.IsNullOrEmpty(countryFlag) ||
+                                       string.IsNullOrEmpty(countryCode))
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    await userStepRepository.Remove(userStep);
+
+                                    await virtualNumberDetailsRepository.Add(new()
+                                    {
+                                        CountryCode = countryCode,
+                                        CountryName = countryName,
+                                        Flag = countryFlag,
+                                        Price = countryPrice
+                                    });
+
+                                    IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
+
+                                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._countryCodeAdd, countryFlag, countryName), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.CountryListEditor(countrys));
+                                    await _telegramBotClient.SendMessage(chatId, ReplyText._backHome, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                }
+                                else if (step == "UserChatId")
+                                {
+                                    _logger.Information($"Sudo {chatId} {text}");
+
+                                    if (!long.TryParse(text, out long userChatId))
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._invalidInput, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    bool anyUser = await userRepository.Any(userChatId);
+
+                                    if (!anyUser)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._userNotFound, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    User user = await userRepository.Get(userChatId);
+
+                                    if (!user.IsVerify)
+                                    {
+                                        CashManager.Remove(chatId);
+                                        await userStepRepository.Remove(userStep);
+                                        await _telegramBotClient.SendMessage(chatId, ReplyText._userNotVerify, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                        return;
+                                    }
+
+                                    WalletUser walletUser = await ApplicationApi.WalletUserAsync(userChatId);
+                                    await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._informashion, userChatId, walletUser.Wallet), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
+                                }
                             }
-                            else if (step == "Code")
-                            {
-                                string code = text.Replace(" ", "");
-
-                                bool isValid = int.TryParse(code, out _);
-
-                                if (!isValid || code.Length != 5)
-                                {
-                                    _logger.Information($"User {chatId} Code Invalid");
-                                    CashManager.Remove(chatId);
-
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._invalidCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                                    return;
-                                }
-
-                                CashSession? cashSession = CashManager.Get(chatId);
-
-                                if (cashSession is null)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                                    return;
-                                }
-
-                                cashSession.keyValuePairs.TryGetValue("CodeToken", out string? codeToken);
-                                cashSession.keyValuePairs.TryGetValue("Phone", out string? phone);
-
-                                if (string.IsNullOrEmpty(codeToken) || string.IsNullOrEmpty(phone))
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                                    return;
-                                }
-
-                                bool verifyState = await ApplicationApi.VerifyUserOTPAsync(chatId, phone, code, codeToken);
-
-                                if (!verifyState)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._invalidCode, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                                    return;
-                                }
-
-                                User user = await userRepository.Get(chatId);
-
-                                user.PhoneNumber = phone;
-                                user.IsVerify = true;
-
-                                await userRepository.Update(user);
-
-                                await userStepRepository.Remove(userStep);
-                                CashManager.Remove(chatId);
-
-                                _logger.Information($"User {chatId} Verify Sucsess");
-
-                                await _telegramBotClient.SendMessage(chatId, ReplyText._verifySucsess, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-                            }
-                            else if (step == "CountryCode")
-                            {
-                                _logger.Information($"Sudo {chatId} {text}");
-
-                                bool anyCountryCode = await virtualNumberDetailsRepository.Any(text);
-
-                                if (anyCountryCode)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._countryCodeExists, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                CashSession cashSession = new();
-                                cashSession.keyValuePairs.Add("CountryCode", text);
-
-                                CashManager.AddOrUpdate(chatId, cashSession);
-
-                                await userStepRepository.Remove(userStep);
-
-                                await userStepRepository.Create(new()
-                                {
-                                    ChatId = chatId,
-                                    ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
-                                    Step = "CountryName"
-                                });
-
-                                await _telegramBotClient.SendMessage(chatId, ReplyText._countryName, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
-
-                            }
-                            else if (step == "CountryName")
-                            {
-                                _logger.Information($"Sudo {chatId} {text}");
-
-                                CashSession? cashSession = CashManager.Get(chatId);
-
-                                if (cashSession is null)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                cashSession.keyValuePairs.Add("CountryName", text);
-                                CashManager.AddOrUpdate(chatId, cashSession);
-
-                                await userStepRepository.Remove(userStep);
-
-                                await userStepRepository.Create(new()
-                                {
-                                    ChatId = chatId,
-                                    ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
-                                    Step = "CountryFlag"
-                                });
-
-                                await _telegramBotClient.SendMessage(chatId, ReplyText._countryFlag, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
-                            }
-                            else if (step == "CountryFlag")
-                            {
-                                _logger.Information($"Sudo {chatId} {text}");
-
-                                bool isFlag = Utils.IsFlagCountry(text);
-
-                                if (!isFlag)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._invalidFlag, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                CashSession? cashSession = CashManager.Get(chatId);
-
-                                if (cashSession is null)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                cashSession.keyValuePairs.Add("CountryFlag", text);
-
-                                CashManager.AddOrUpdate(chatId, cashSession);
-
-                                await userStepRepository.Remove(userStep);
-
-                                await userStepRepository.Create(new()
-                                {
-                                    ChatId = chatId,
-                                    ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
-                                    Step = "CountryPrice"
-                                });
-
-                                await _telegramBotClient.SendMessage(chatId, ReplyText._countryPrice, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.Back());
-                            }
-                            else if (step == "CountryPrice")
-                            {
-                                _logger.Information($"Sudo {chatId} {text}");
-
-                                if (!decimal.TryParse(text, out decimal countryPrice))
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._invalidPrice, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                CashSession? cashSession = CashManager.Get(chatId);
-
-                                if (cashSession is null)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                cashSession.keyValuePairs.TryGetValue("CountryName", out string? countryName);
-                                cashSession.keyValuePairs.TryGetValue("CountryFlag", out string? countryFlag);
-                                cashSession.keyValuePairs.TryGetValue("CountryCode", out string? countryCode);
-
-                                if (string.IsNullOrEmpty(countryName) ||
-                                   string.IsNullOrEmpty(countryFlag) ||
-                                   string.IsNullOrEmpty(countryCode))
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                await userStepRepository.Remove(userStep);
-
-                                await virtualNumberDetailsRepository.Add(new()
-                                {
-                                    CountryCode = countryCode,
-                                    CountryName = countryName,
-                                    Flag = countryFlag,
-                                    Price = countryPrice
-                                });
-
-                                IEnumerable<VirtualNumberDetails> countrys = await virtualNumberDetailsRepository.GetAll();
-
-                                await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._countryCodeAdd, countryFlag, countryName), parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.CountryListEditor(countrys));
-                                await _telegramBotClient.SendMessage(chatId, ReplyText._backHome, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                            }
-                            else if (step == "UserChatId")
-                            {
-                                _logger.Information($"Sudo {chatId} {text}");
-
-                                if (!long.TryParse(text, out long userChatId))
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._invalidInput, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                bool anyUser = await userRepository.Any(userChatId);
-
-                                if (!anyUser)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._userNotFound, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                User user = await userRepository.Get(userChatId);
-
-                                if (!user.IsVerify)
-                                {
-                                    CashManager.Remove(chatId);
-                                    await userStepRepository.Remove(userStep);
-                                    await _telegramBotClient.SendMessage(chatId, ReplyText._userNotVerify, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                                    return;
-                                }
-
-                                WalletUser walletUser = await ApplicationApi.WalletUserAsync(userChatId);
-                                await _telegramBotClient.SendMessage(chatId, string.Format(ReplyText._informashion, userChatId, walletUser.Wallet), parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeSudo());
-                            }
-                        }
-                        break;
+                            break;
+                    }
+                }
+                else if (message.Type == MessageType.Document)
+                {
+                    await OnDocument(message, chatId);
                 }
             }
-            else if (message.Type == MessageType.Document)
+            catch (Exception ex)
             {
-                await OnDocument(message, chatId);
+                _logger.Error(ex, "❌ Error");
+
+
+                ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
+                IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
+
+                bool anySudo = await sudoRepository.Any(chatId);
+
+                if (anySudo)
+                {
+                    await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeSudo());
+                    return;
+                }
+
+                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
+
+                bool anyStep = await userStepRepository.Any(chatId);
+                if (anyStep)
+                {
+                    UserStep userStep = await userStepRepository.Get(chatId);
+                    await userStepRepository.Remove(userStep);
+                }
+
+                CashManager.Remove(chatId);
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "❌ Error");
-
-
-            ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
-            IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
-
-            bool anySudo = await sudoRepository.Any(chatId);
-
-            if (anySudo)
-            {
-                await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeSudo());
-                return;
-            }
-
-            await _telegramBotClient.SendMessage(chatId, ReplyText._timeLater, parseMode: ParseMode.Html, replyMarkup: ReplyKeyboard.HomeUser());
-
-            bool anyStep = await userStepRepository.Any(chatId);
-            if (anyStep)
-            {
-                UserStep userStep = await userStepRepository.Get(chatId);
-                await userStepRepository.Remove(userStep);
-            }
-
-            CashManager.Remove(chatId);
-        }
+        });
+        await Task.CompletedTask;
     }
 
     private async Task OnReportBot(Message message, long chatId)
@@ -1122,40 +1264,12 @@ public class BotApi
         int messageId = message.Id;
 
         IVirtualNumberDetailsRepository virtualNumberDetailsRepository = _serviceProvider.GetRequiredService<IVirtualNumberDetailsRepository>();
-        IUserRepository userRepository = _serviceProvider.GetRequiredService<IUserRepository>();
+        ISudoRepository sudoRepository = _serviceProvider.GetRequiredService<ISudoRepository>();
 
-        bool anyUser = await userRepository.Any(chatId);
+        bool anySudo = await sudoRepository.Any(chatId);
 
-        if (!anyUser)
+        if (anySudo)
         {
-            return;
-        }
-
-        User user = await userRepository.Get(chatId);
-
-        if (!user.IsVerify)
-        {
-            IUserStepRepository userStepRepository = _serviceProvider.GetRequiredService<IUserStepRepository>();
-
-            _logger.Information($"User {chatId} Not Verify");
-
-            bool anyStep = await userStepRepository.Any(chatId);
-
-            if (anyStep)
-            {
-                UserStep userStep = await userStepRepository.Get(chatId);
-                await userStepRepository.Remove(userStep);
-            }
-
-            await userStepRepository.Create(new()
-            {
-                ChatId = chatId,
-                ExpierTime = DateTime.Now.AddMinutes(_appSettings.TimeOutMinute),
-                Step = "Phone"
-            });
-
-            await _telegramBotClient.SendMessage(chatId, ReplyText._sendPhone, parseMode: ParseMode.Html, replyParameters: messageId, replyMarkup: ReplyKeyboard.HomeUser());
-
             return;
         }
 
